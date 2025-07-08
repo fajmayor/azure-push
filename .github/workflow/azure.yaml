@@ -1,0 +1,60 @@
+name: Build and Push Docker Image to Azure Container Registry
+run-name: ${{ github.workflow }} triggered by @${{ github.actor }} for ${{ github.event.head_commit.message }} from ${{ github.ref_name }}
+on:
+  push:
+    branches:
+      - main
+      - development
+  pull_request:
+    branches:
+      - main
+      - development
+  workflow_dispatch:
+
+jobs:
+  docker-build-and-push:
+    name: "Docker Build and Push"
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    permissions: write-all
+
+    steps:
+      - name: Set up QEMU
+        uses: docker/setup-qemu-action@v3
+        with:
+            platforms: all
+      
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Authenticate to Azure Cloud
+        uses: azure/login@v1
+        with:
+          creds: ${{ secrets.AZURE_CREDENTIALS }}
+
+      - name: Login to Azure Container Registry
+        uses: azure/docker-login@v1
+        with:
+          login-server: tmmcpregistry-hjata4hfarb4fqfa.azurecr.io
+          username: ${{ secrets.MCP_REGISTRY_USERNAME }}
+          password: ${{ secrets.MCP_REGISTRY_PASSWORD }}
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+      
+      - name: Set image tag env
+        run: |
+          # Generate tag with date and commit SHA
+          TAG=$(date +%Y-%m-%d)-${GITHUB_SHA::7}
+          echo "TAG=$TAG" >> $GITHUB_ENV
+          echo "Generated tag: $TAG"
+
+      - name: Pull nginx image
+        run: docker pull nginx:latest
+
+      - name: Tag image for your registry
+        run: docker tag nginx:latest tmmcpregistry-hjata4hfarb4fqfa.azurecr.io/nginx:${{ env.TAG }}
+
+      - name: Push image to your registry
+        run: docker push tmmcpregistry-hjata4hfarb4fqfa.azurecr.io/nginx:${{ env.TAG }}
+
